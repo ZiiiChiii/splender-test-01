@@ -650,7 +650,7 @@ function renderDashboard() {
   let html = '';
   const allKeys = ['w', 'u', 'g', 'r', 'k', 'o'];
   
-  allKeys.forEach(k => {
+  allKeys.forEach((k, idx) => {
     const tokenVal = p.tokens[k] || 0;
     const bonusVal = p.bonus[k] || 0;
     const isGold = (k === 'o');
@@ -670,7 +670,7 @@ function renderDashboard() {
     }
 
     html += `
-      <div class="res-block ${pulseClass}">
+      <div class="res-block ${pulseClass}" id="vault-target-${k}">
         ${tDiffHtml}
         ${bDiffHtml}
         <div class="res-circle ${GEM_CLASSES[k]}"></div>
@@ -1017,6 +1017,92 @@ function executeCardPurchaseEffects(card, breakdown, neededGold) {
   return { totalGemsSpent: totalGemsSpent };
 }
 
+// 🚀 全新設計：卡牌飛向對應皇家金庫的精算動畫控制器
+function animateCardFlightToGoldVault(cardId, providesColor, callback) {
+  const sourceDom = document.getElementById(`dom-card-${cardId}`);
+  const targetDom = document.getElementById(`vault-target-${providesColor}`);
+  const fxContainer = document.getElementById('effects-layer');
+  
+  if (!sourceDom || !targetDom || !fxContainer) {
+    if (callback) callback();
+    return;
+  }
+
+  // 1. 卡牌本體瞬間放大 1.1 倍，營造被「拿起來」的奢華立體抽離感
+  sourceDom.style.transition = 'transform 0.15s ease-out';
+  sourceDom.style.transform = 'scale(1.1)';
+  sourceDom.style.zIndex = '999';
+
+  setTimeout(() => {
+    // 2. 獲取原卡牌與目標金庫的座標幾何資訊
+    const srcRect = sourceDom.getBoundingClientRect();
+    const dstRect = targetDom.getBoundingClientRect();
+
+    // 3. 使用 cloneNode 完整複製一張與原版等大的鏡像虛擬卡
+    const clone = sourceDom.cloneNode(true);
+    clone.id = `ghost-card-${cardId}`;
+    
+    // 移除複製體中可能干擾的動畫 Class 
+    clone.classList.remove('animate-deal', 'animate-buy', 'animate-reserve');
+    
+    // 設定特效層獨立定位 (絕對貼合原位置)
+    clone.style.position = 'fixed';
+    clone.style.top = `${srcRect.top}px`;
+    clone.style.left = `${srcRect.left}px`;
+    clone.style.width = `${srcRect.width}px`;
+    clone.style.height = `${srcRect.height}px`;
+    clone.style.margin = '0';
+    clone.style.pointerEvents = 'none';
+    clone.style.transformOrigin = 'center center';
+    clone.style.zIndex = '10000';
+    
+    // 隱藏複製體裡面的互動按鈕防止突兀
+    const actions = clone.querySelector('.card-actions');
+    if (actions) actions.style.display = 'none';
+
+    fxContainer.appendChild(clone);
+
+    // 4. 計算飛行所需的真實位移差 (不使用 left/top，完全透過 transform 位移)
+    const deltaX = (dstRect.left + dstRect.width / 2) - (srcRect.left + srcRect.width / 2);
+    const deltaY = (dstRect.top + dstRect.height / 2) - (srcRect.top + srcRect.height / 2);
+
+    // 強制瀏覽器重繪觸發初始狀態
+    void clone.offsetWidth;
+
+    // 5. 啟動拋物線飛向金庫、逐漸縮小並淡出消失的硬體加速動畫
+    clone.style.transition = 'transform 0.65s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.65s ease-in';
+    clone.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.12) rotate(15deg)`;
+    clone.style.opacity = '0';
+
+    // 6. 飛行抵達終點
+    setTimeout(() => {
+      // 移除幽靈複製體
+      if (clone.parentNode) clone.parentNode.removeChild(clone);
+
+      // 7. 觸發目標寶石金庫彈跳與永久資產 +1 的動態回饋
+      targetDom.classList.remove('animate-pulse-glow');
+      void targetDom.offsetWidth; // 刷新狀態
+      targetDom.classList.add('animate-pulse-glow');
+
+      // 建立浮動的「+1 🛡️」永久減免標籤
+      const plusOne = document.createElement('span');
+      plusOne.className = 'floating-permanent-anim';
+      plusOne.style.color = '#ffd700';
+      plusOne.style.fontWeight = '900';
+      plusOne.style.fontSize = '0.9rem';
+      plusOne.style.textShadow = '0 0 8px #ffd700';
+      plusOne.textContent = '+1 🛡️';
+      targetDom.appendChild(plusOne);
+
+      setTimeout(() => { if (plusOne.parentNode) plusOne.parentNode.removeChild(plusOne); }, 1500);
+
+      // 執行主要交易清算回呼
+      if (callback) callback();
+    }, 650);
+
+  }, 1500 * 0.1); // 短暫放大停留後起飛
+}
+
 window.buyBoardCard = function(level, idx) {
   const card = state.board[level][idx];
   if (!card) return;
@@ -1024,12 +1110,8 @@ window.buyBoardCard = function(level, idx) {
   const afford = canPlayerAffordCard(card);
   if (!afford.affordable) return;
 
-  const cardDom = document.getElementById(`dom-card-${card.id}`);
-  if (cardDom) {
-    cardDom.classList.add('animate-buy');
-  }
-
-  setTimeout(() => {
+  // 攔截原本的定點淡出，改由複製體飛行特效層接管
+  animateCardFlightToGoldVault(card.id, card.provides, () => {
     if (!isSfxMuted && sfxBuyEl) { sfxBuyEl.currentTime = 0; sfxBuyEl.play().catch(e=>{}); }
     
     const meta = executeCardPurchaseEffects(card, afford.breakdown, afford.neededGold);
@@ -1050,7 +1132,7 @@ window.buyBoardCard = function(level, idx) {
 
     auditInstantAchievements("buy", { card: card, level: level, totalGemsSpent: meta.totalGemsSpent, isReserved: false });
     endTurnFlow();
-  }, 280);
+  });
 };
 
 window.buyReservedCard = function(idx) {
@@ -1060,10 +1142,8 @@ window.buyReservedCard = function(idx) {
   const afford = canPlayerAffordCard(card);
   if (!afford.affordable) return;
 
-  const cardDom = document.getElementById(`dom-card-${card.id}`);
-  if (cardDom) cardDom.classList.add('animate-buy');
-
-  setTimeout(() => {
+  // 攔截保留區購買
+  animateCardFlightToGoldVault(card.id, card.provides, () => {
     if (!isSfxMuted && sfxBuyEl) { sfxBuyEl.currentTime = 0; sfxBuyEl.play().catch(e=>{}); }
     
     const meta = executeCardPurchaseEffects(card, afford.breakdown, afford.neededGold);
@@ -1071,7 +1151,7 @@ window.buyReservedCard = function(idx) {
 
     auditInstantAchievements("buy", { card: card, level: 'reserved', totalGemsSpent: meta.totalGemsSpent, isReserved: true });
     endTurnFlow();
-  }, 280);
+  });
 };
 
 window.reserveBoardCard = function(level, idx) {
@@ -1194,7 +1274,7 @@ const TUTORIAL_STEPS_DATA = [
   {
     elementId: "guide-dashboard",
     title: "🪙 第二步：皇家金庫資產欄",
-    text: "左側為您持有的籌碼數量與卡片提供的減免產量；右側為已來訪隨行的貴族。請隨時注意，背包籌碼總上限為 10 顆！"
+    text: "左側為您持建立的籌碼數量與卡片提供的減免產量；右側為已來訪隨行的貴族。請隨時注意，背包籌碼總上限為 10 顆！"
   },
   {
     elementId: "guide-matrix",
@@ -1285,7 +1365,6 @@ window.nextFloatingStep = function() {
   }
 };
 
-// 🚀 防跑版核心：動態計算行動裝置內扣除工具列的 1% 真實高度高度
 function calculateRealVh() {
   let vh = window.innerHeight * 0.01;
   document.documentElement.style.setProperty('--vh', `${vh}px`);
