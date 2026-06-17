@@ -322,7 +322,7 @@ html, body {
 .card-costs { display: flex; flex-wrap: wrap; gap: 2px; margin-top: auto; padding-top: 2px; }
 .cost-dot { display: flex; align-items: center; gap: 2px; font-size: 0.6rem; font-weight: 700; padding: 1px 3px; border-radius: 2px; background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.1); }
 .cost-dot.free { opacity: 0.1; }
-.cost-dot-circle { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background-size: cover; background-position: center; }
+.cost-dot-circle { inline-block; width: 7px; height: 7px; border-radius: 50%; background-size: cover; background-position: center; }
 .card-actions { display: flex; gap: 3px; margin-top: 4px; }
 
 .btn-card { flex: 1; padding: 2px 0; border: 1px solid #4a3e35; background: rgba(28, 23, 20, 0.9); color: var(--text); border-radius: 2px; font-size: 0.55rem; font-weight: 600; cursor: pointer; text-shadow: 0 1px 2px #000; }
@@ -351,6 +351,14 @@ html, body {
 .t-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 204, 0, 0.2); }
 .t-dot.active { background: #ffcc00; box-shadow: 0 0 10px #ffcc00; }
 .btn-tutorial-next { padding: 6px 16px; background: linear-gradient(180deg, #ffe680, #ffcc00, #b38600); color: #110e0c; border: none; border-radius: 4px; font-size: 0.78rem; font-weight: 800; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+
+/* ── 🌌 特效層獨立定位宣告 ── */
+#effects-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99999;
+}
 
 /* ── RWD / 行動端一頁封頂完美適配器 ────────────────────────── */
 @media (max-width: 768px) {
@@ -438,7 +446,6 @@ html, body {
   .deck-count { font-size: 0.45rem; }
   .grid-4 { gap: 2px; }
   
-  /* 讓卡片內容能隨高度變小而極致壓縮內容 */
   .card { border-radius: 2px; }
   .card-content-wrapper { padding: 2px; }
   .card-pts { font-size: 0.68rem; }
